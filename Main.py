@@ -39,17 +39,27 @@ def convert_pixel(pixel, type):
 	else:
 		raise Exception("Unknown pixel type {}.".format(type))
 
-def process(data,filename,useLzma):
+def process(Data,filename,useLzma):
 
 	if useLzma:
-		data = data[26:]
+		data = Data[26:]
 		data = data[0:9] + (b'\x00' * 4) + data[9:]
 		try:
 			data = lzma.LZMADecompressor().decompress(data)
-			print('[*] Successfully decompressed')
+			print('[*] Successfully decompressed using latest format')
 		except:
-			print('[*] Decompression failed !')
-			sys.exit()
+			data = Data[0:9] + (b'\x00' * 4) + Data[9:]
+
+			try:
+
+				data = lzma.LZMADecompressor().decompress(data)
+				print('[*] Successfully decompressed using old format')
+
+			except:
+
+				print('[*] Decompression failed !')
+				sys.exit()
+
 	try:
 
 		Stream = BytesIO(data)
@@ -86,10 +96,10 @@ def process(data,filename,useLzma):
 					
 
 				else:
-					print("[INFO]: PixelFormat {}, Width {}, Height {}".format(Reader.read_byte(),Reader.read_uint16(),Reader.read_uint16()))
+					Reader.read_byte() #PixelType
+					Reader.read_uint16() #Width
+					Reader.read_uint16() #Height
 					
-
-
 			else:
 				Reader.read(DataBlockSize)
 	except:
@@ -107,7 +117,7 @@ def read_texture(Reader,filename):
 
 	if PixelType == 0:
 		pixelSize = 4
-	elif PixelType == 2 or PixelType ==3 or PixelType == 4 or PixelType == 6:
+	elif PixelType == 2 or PixelType == 3 or PixelType == 4 or PixelType == 6:
 		pixelSize = 2
 	elif PixelType == 10:
 		pixelSize = 1
@@ -129,7 +139,7 @@ def read_texture(Reader,filename):
 
 if __name__ == '__main__':
 
-	parser = argparse.ArgumentParser(description='Extract png files from old .sc files Clash Royale')
+	parser = argparse.ArgumentParser(description='Extract png files from old .sc files')
 	parser.add_argument('files', help='.sc file(s)', nargs='+')
 	parser.add_argument('-lzma', help='Include lzma decompression', action='store_true')
 
