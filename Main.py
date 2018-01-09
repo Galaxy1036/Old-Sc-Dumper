@@ -115,7 +115,7 @@ def read_texture(Reader,filename):
 
 	print("[INFO]: PixelFormat {}, Width {}, Height {}".format(PixelType,Width,Height))
 
-	if PixelType == 0:
+	if PixelType == 0 or PixelType == 1:
 		pixelSize = 4
 	elif PixelType == 2 or PixelType == 3 or PixelType == 4 or PixelType == 6:
 		pixelSize = 2
