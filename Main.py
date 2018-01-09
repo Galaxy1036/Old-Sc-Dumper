@@ -11,7 +11,7 @@ import struct
 
 def convert_pixel(pixel, type):
 
-	if type == 0:
+	if type == 0 or type == 1:
 		# RGB8888
 		return struct.unpack('4B', pixel)
 	elif type == 2:
