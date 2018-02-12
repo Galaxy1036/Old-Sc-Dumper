@@ -51,7 +51,7 @@ def process(Data, filename, useLzma):
         try:
             data = lzma.LZMADecompressor().decompress(data)
             print('[*] Successfully decompressed using latest format')
-        except _lzma.LZMAError:
+        except lzma.LZMAError:
             data = Data[0:9] + (b'\x00' * 4) + Data[9:]
 
             try:
@@ -59,7 +59,7 @@ def process(Data, filename, useLzma):
                 data = lzma.LZMADecompressor().decompress(data)
                 print('[*] Successfully decompressed using old format')
 
-            except _lzma.LZMAError:
+            except lzma.LZMAError:
 
                 print('[*] Decompression failed !')
                 sys.exit()
