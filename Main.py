@@ -52,7 +52,7 @@ def process(data, filename, useLzma):
     picCount = 0
 
     if useLzma:
-        if data[:2].decode('utf-8') == 'SC':
+        if data[:2] == b'SC':
             data = data[26:35] + (b'\x00' * 4) + data[35:]
 
             try:
@@ -63,7 +63,7 @@ def process(data, filename, useLzma):
                 print('[*] Decompression failed using latest format !')
                 sys.exit()
 
-        else:
+        elif data[:2] == b']\x00':
             data = data[0:9] + (b'\x00' * 4) + data[9:]
 
             try:
@@ -73,6 +73,10 @@ def process(data, filename, useLzma):
             except lzma.LZMAError:
                 print('[*] Decompression failed using old format !')
                 sys.exit()
+
+        else:
+            print('[*] Can\'t recognize your file, maybe he is already decompressed !')
+            sys.exit()
 
     try:
         Reader = BinaryReader(data)
