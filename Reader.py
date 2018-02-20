@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
 
-from io import BufferedReader
+from io import BufferedReader, BytesIO
 
 
 class BinaryReader(BufferedReader):
 
     def __init__(self, stream):
-        super().__init__(stream)
+        super().__init__(BytesIO(stream))
 
     def read_uint32(self):
         return int.from_bytes(self.read(4), 'little')
