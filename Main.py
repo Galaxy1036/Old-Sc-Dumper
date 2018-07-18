@@ -103,7 +103,7 @@ def process(data, filename, useLzma):
             if DataBlockTag == "18" or DataBlockTag == "01":
 
                 if DataBlockSize > 5:
-                    print("[*] Texture founded")
+                    print("[*] Texture found")
                     read_texture(Reader, filename, picCount)
                     picCount += 1
 
