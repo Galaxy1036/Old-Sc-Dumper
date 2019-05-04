@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 
 import os
-import sys
 import lzma
+import lzham
 import struct
 import argparse
 
@@ -11,7 +11,6 @@ from Reader import BinaryReader
 
 
 def convert_pixel(pixel, type):
-
     if type == 0 or type == 1:
         # RGB8888
         return struct.unpack('4B', pixel)
@@ -48,100 +47,106 @@ def convert_pixel(pixel, type):
         raise Exception("Unknown pixel type {}.".format(type))
 
 
-def process(data, filename, useLzma):
+def process(data, filename, decompress):
     picCount = 0
 
-    if useLzma:
+    if decompress:
         if data[:2] == b'SC':
-            data = data[26:35] + (b'\x00' * 4) + data[35:]
+            # Skip the header if there's any
+            hash_length = int.from_bytes(data[6: 10], 'big')
+            data = data[10 + hash_length:]
+
+        if data[:4] == b'SCLZ':
+            print('[*] Detected LZHAM compression !')
+
+            dict_size = int.from_bytes(data[4:5], 'big')
+            uncompressed_size = int.from_bytes(data[5:9], 'little')
 
             try:
-                data = lzma.LZMADecompressor().decompress(data)
-                print('[*] Successfully decompressed using latest format')
+                data = lzham.decompress(data[9:], uncompressed_size, {'dict_size_log2': dict_size})
 
-            except lzma.LZMAError:
-                print('[*] Decompression failed using latest format !')
-                sys.exit()
+            except Exception as exception:
+                print('Cannot decompress {} !'.format(filename))
+                return
 
-        elif data[:2] == b']\x00':
+        else:
+            print('[*] Detected LZMA compression !')
             data = data[0:9] + (b'\x00' * 4) + data[9:]
 
             try:
                 data = lzma.LZMADecompressor().decompress(data)
-                print('[*] Successfully decompressed using old format')
 
-            except lzma.LZMAError:
-                print('[*] Decompression failed using old format !')
-                sys.exit()
+            except Exception as exception:
+                print('Cannot decompress {} !'.format(filename))
+                return
 
-        else:
-            print('[*] Can\'t recognize your file, maybe he is already decompressed !')
-            sys.exit()
+        print('[*] Successfully decompressed {} !'.format(filename))
 
     try:
-        Reader = BinaryReader(data)
+        reader = BinaryReader(data)
+
         # Start reading binary stuff
         for i in range(6):
-            Reader.read_uint16()  # ShapeCount etc..
+            reader.read_uint16()  # ShapeCount etc..
 
-        Reader.read(5)
+        reader.read(5)
 
-        ExportCount = Reader.read_uint16()
+        exportCount = reader.read_uint16()
 
-        for i in range(ExportCount):
-            Reader.read_int16()
+        for i in range(exportCount):
+            reader.read_int16()
 
-        for i in range(ExportCount):
-            Length = Reader.read_byte()
-            Reader.read_string(Length)
+        for i in range(exportCount):
+            reader.read_string(reader.read_byte())
 
-        while Reader.peek():
+        while reader.peek():
+            dataBlockTag = reader.read(1).hex()
+            dataBlockSize = reader.read_uint32()
 
-            DataBlockTag = Reader.read(1).hex()
-            DataBlockSize = Reader.read_uint32()
-
-            if DataBlockTag == "18" or DataBlockTag == "01":
-
-                if DataBlockSize > 5:
+            if dataBlockTag == "18" or dataBlockTag == "01":
+                if dataBlockSize > 5:
                     print("[*] Texture found")
-                    read_texture(Reader, filename, picCount)
+                    read_texture(reader, filename, picCount)
                     picCount += 1
 
                 else:
-                    Reader.read_byte()  # PixelType
-                    Reader.read_uint16()  # Width
-                    Reader.read_uint16()  # Height
+                    reader.read_byte()  # PixelType
+                    reader.read_uint16()  # Width
+                    reader.read_uint16()  # Height
 
             else:
-                Reader.read(DataBlockSize)
+                reader.read(dataBlockSize)
 
     except Exception as exception:
         print('[*] An error occured while reading ({}), maybe ur file is compressed. Try to re-run the script with the option -lzma'.format(exception.__class__.__name__))
 
 
-def read_texture(Reader, filename, picCount):
+def read_texture(reader, filename, picCount):
 
-    PixelType = Reader.read_byte()
-    Width = Reader.read_uint16()
-    Height = Reader.read_uint16()
+    pixelType = reader.read_byte()
+    width = reader.read_uint16()
+    height = reader.read_uint16()
 
-    print("[INFO]: PixelFormat {}, Width {}, Height {}".format(PixelType, Width, Height))
+    print("[INFO]: PixelFormat {}, Width {}, Height {}".format(pixelType, width, height))
 
-    if PixelType == 0 or PixelType == 1:
+    if pixelType in (0, 1):
         pixelSize = 4
-    elif PixelType == 2 or PixelType == 3 or PixelType == 4 or PixelType == 6:
-        pixelSize = 2
-    elif PixelType == 10:
-        pixelSize = 1
-    else:
-        raise Exception("Unknown pixel type {}.".format(PixelType))
 
-    img = Image.new("RGBA", (Width, Height))
+    elif pixelType in (2, 3, 4, 6):
+        pixelSize = 2
+
+    elif pixelType == 10:
+        pixelSize = 1
+
+    else:
+        raise Exception("Unknown pixel type {}.".format(pixelType))
+
+    img = Image.new("RGBA", (width, height))
     pixels = []
 
-    for y in range(Width):
-        for x in range(Height):
-            pixels.append(convert_pixel(Reader.read(pixelSize), PixelType))
+    for y in range(width):
+        for x in range(height):
+            pixels.append(convert_pixel(reader.read(pixelSize), pixelType))
 
     img.putdata(pixels)
     img.save(filename.split('.')[0] + ('_' * picCount) + '.png', 'PNG')
@@ -151,15 +156,15 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Extract png files from old .sc files')
     parser.add_argument('files', help='.sc file(s)', nargs='+')
-    parser.add_argument('-lzma', help='Include lzma decompression', action='store_true')
+    parser.add_argument('-d', '--decompress', help='Try to decompress your file before processing it', action='store_true')
 
     args = parser.parse_args()
 
     for file in args.files:
         if file.endswith('.sc'):
-            if os.path.exists(file):
+            if os.path.isfile(file):
                 with open(file, 'rb') as f:
-                    process(f.read(), file, args.lzma)
+                    process(f.read(), file, args.decompress)
 
             else:
                 print('[*] File don\'t exist :/')
